@@ -10,9 +10,14 @@ const ctx = canvas.getContext("2d");
 const insightCards = document.getElementById("insightCards");
 const buyCandidates = document.getElementById("buyCandidates");
 const sellCandidates = document.getElementById("sellCandidates");
+const selectedSymbolTitle = document.getElementById("selectedSymbolTitle");
+const menuToggle = document.getElementById("menuToggle");
+const drawer = document.getElementById("drawer");
+const drawerClose = document.getElementById("drawerClose");
+const companyList = document.getElementById("companyList");
 
 const pointHistory = new Map();
-let leadSymbol = "stock";
+let selectedSymbol = "stock";
 let intervalId = null;
 
 function formatDate(d) {
@@ -201,15 +206,36 @@ function renderInsights() {
   }
 }
 
+function renderCompanyList() {
+  companyList.innerHTML = "";
+  const symbols = [...pointHistory.keys()];
+  symbols.forEach((symbol) => {
+    const li = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = symbol;
+    if (symbol === selectedSymbol) {
+      button.classList.add("active");
+    }
+    button.addEventListener("click", () => {
+      selectedSymbol = symbol;
+      selectedSymbolTitle.textContent = `${selectedSymbol} グラフ`;
+      drawChart(selectedSymbol);
+      updateHistoryView();
+      renderCompanyList();
+      drawer.classList.remove("open");
+    });
+    li.appendChild(button);
+    companyList.appendChild(li);
+  });
+}
+
 function updateHistoryView() {
   historyList.innerHTML = "";
-  [...pointHistory.entries()].forEach(([name, points]) => {
-    const last = points[points.length - 1];
-    if (!last) {
-      return;
-    }
+  const points = pointHistory.get(selectedSymbol) || [];
+  [...points].reverse().forEach((point) => {
     const li = document.createElement("li");
-    li.textContent = `${name}: ${formatNum(last.value)} (${last.label})`;
+    li.textContent = `${selectedSymbol}: ${formatNum(point.value)} (${point.label})`;
     historyList.appendChild(li);
   });
 }
@@ -230,10 +256,16 @@ async function fetchStock() {
     }
 
     entries.forEach((entry) => addPricePoint(entry.name, entry.value));
-    leadSymbol = entries[0].name;
+
+    if (!pointHistory.has(selectedSymbol)) {
+      selectedSymbol = entries[0].name;
+    }
+
+    selectedSymbolTitle.textContent = `${selectedSymbol} グラフ`;
+    renderCompanyList();
     updateHistoryView();
     renderInsights();
-    drawChart(leadSymbol);
+    drawChart(selectedSymbol);
   } catch (error) {
     responseView.textContent = `取得に失敗しました: ${error.message}`;
   }
@@ -246,6 +278,14 @@ function startAutoRefresh() {
   const seconds = Math.max(2, Number(intervalInput.value) || 5);
   intervalId = setInterval(fetchStock, seconds * 1000);
 }
+
+menuToggle.addEventListener("click", () => {
+  drawer.classList.toggle("open");
+});
+
+drawerClose.addEventListener("click", () => {
+  drawer.classList.remove("open");
+});
 
 refreshButton.addEventListener("click", fetchStock);
 applyIntervalButton.addEventListener("click", startAutoRefresh);

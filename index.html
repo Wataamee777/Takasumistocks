@@ -8,8 +8,21 @@
   </head>
   <body>
     <main>
-      <h1>Takasumi Stock Viewer</h1>
-      <p>API: <code>GET https://api.takasumibot.com/v3/stock/</code></p>
+      <header class="top-bar">
+        <button id="menuToggle" class="menu-toggle" type="button" aria-label="銘柄メニューを開く">☰ 会社切替</button>
+        <div>
+          <h1>Takasumi Stock Viewer</h1>
+          <p>API: <code>GET https://api.takasumibot.com/v3/stock/</code></p>
+        </div>
+      </header>
+
+      <aside id="drawer" class="drawer" aria-label="会社切替メニュー">
+        <div class="drawer-head">
+          <h2>会社一覧</h2>
+          <button id="drawerClose" type="button" aria-label="閉じる">×</button>
+        </div>
+        <ul id="companyList" class="company-list"></ul>
+      </aside>
 
       <section class="controls">
         <button id="refreshButton" type="button">今すぐ更新</button>
@@ -30,18 +43,18 @@
       </section>
 
       <section>
-        <h2>stock グラフ（先頭銘柄）</h2>
+        <h2 id="selectedSymbolTitle">銘柄グラフ</h2>
         <canvas id="stockCanvas" width="900" height="300" aria-label="stock line chart"></canvas>
+      </section>
+
+      <section>
+        <h2>選択中会社の推移</h2>
+        <ul id="history"></ul>
       </section>
 
       <section>
         <h2>レスポンス</h2>
         <pre id="responseView">読み込み待機中...</pre>
-      </section>
-
-      <section>
-        <h2>直近価格一覧</h2>
-        <ul id="history"></ul>
       </section>
     </main>
 
