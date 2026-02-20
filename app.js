@@ -17,6 +17,7 @@ const drawerClose = document.getElementById("drawerClose");
 const companyList = document.getElementById("companyList");
 
 const pointHistory = new Map();
+const companyMeta = new Map();
 let selectedSymbol = "stock";
 let intervalId = null;
 
@@ -28,46 +29,106 @@ function formatNum(value) {
   return Number(value).toFixed(2);
 }
 
+function setPriceSeries(symbol, values) {
+  const now = Date.now();
+  const normalized = values
+    .filter((value) => typeof value === "number")
+    .slice(-400)
+    .map((value, index, arr) => {
+      const offset = (arr.length - 1 - index) * 1000;
+      return { label: formatDate(new Date(now - offset)), value };
+    });
+
+  pointHistory.set(symbol, normalized);
+}
+
 function addPricePoint(symbol, value) {
   if (!pointHistory.has(symbol)) {
     pointHistory.set(symbol, []);
   }
   const points = pointHistory.get(symbol);
   points.push({ label: formatDate(new Date()), value });
-  if (points.length > 40) {
+  if (points.length > 400) {
     points.shift();
   }
 }
 
-function extractEntries(data) {
-  if (typeof data?.stock === "number") {
-    return [{ name: "stock", value: data.stock }];
+function getCompanyArray(data) {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (Array.isArray(data?.companies)) {
+    return data.companies;
+  }
+  if (Array.isArray(data?.stocks)) {
+    return data.stocks;
+  }
+  if (Array.isArray(data?.data)) {
+    return data.data;
+  }
+  return null;
+}
+
+function normalizeCompanies(data) {
+  const companies = getCompanyArray(data);
+  if (!companies) {
+    return null;
   }
 
-  const source = Array.isArray(data)
-    ? data
-    : Array.isArray(data?.stocks)
-      ? data.stocks
-      : Array.isArray(data?.data)
-        ? data.data
-        : null;
+  const normalized = companies
+    .map((item, index) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
 
-  if (source) {
-    return source
-      .map((item, index) => {
-        const value = [item.stock, item.price, item.value].find((v) => typeof v === "number");
-        if (typeof value !== "number") {
-          return null;
-        }
-        const name = item.name || item.symbol || item.code || `stock-${index + 1}`;
-        return { name, value };
-      })
-      .filter(Boolean);
+      const symbol = item.id || item.symbol || item.code || `stock-${index + 1}`;
+      const name = item.name || symbol;
+
+      if (Array.isArray(item.prices) && item.prices.some((v) => typeof v === "number")) {
+        return { symbol, name, prices: item.prices.filter((v) => typeof v === "number") };
+      }
+
+      const current = [item.stock, item.price, item.value].find((v) => typeof v === "number");
+      if (typeof current === "number") {
+        return { symbol, name, prices: [current] };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+
+  return normalized.length > 0 ? normalized : null;
+}
+
+function applyData(data) {
+  const normalizedCompanies = normalizeCompanies(data);
+
+  if (normalizedCompanies) {
+    normalizedCompanies.forEach((company) => {
+      companyMeta.set(company.symbol, { name: company.name });
+      if (company.prices.length > 1) {
+        setPriceSeries(company.symbol, company.prices);
+      } else {
+        addPricePoint(company.symbol, company.prices[0]);
+      }
+    });
+
+    return normalizedCompanies.map((c) => ({ name: c.symbol, value: c.prices[c.prices.length - 1] }));
+  }
+
+  if (typeof data?.stock === "number") {
+    companyMeta.set("stock", { name: "stock" });
+    addPricePoint("stock", data.stock);
+    return [{ name: "stock", value: data.stock }];
   }
 
   if (data && typeof data === "object") {
     const numericProps = Object.entries(data).filter(([, v]) => typeof v === "number");
     if (numericProps.length > 0) {
+      numericProps.forEach(([key, value]) => {
+        companyMeta.set(key, { name: key });
+        addPricePoint(key, value);
+      });
       return numericProps.map(([key, value]) => ({ name: key, value }));
     }
   }
@@ -76,7 +137,7 @@ function extractEntries(data) {
 }
 
 function drawChart(symbol) {
-  const points = pointHistory.get(symbol) || [];
+  const points = (pointHistory.get(symbol) || []).slice(-220);
   const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
   ctx.fillStyle = "#ffffff";
@@ -122,16 +183,12 @@ function drawChart(symbol) {
     }
   });
   ctx.stroke();
-
-  ctx.fillStyle = "#111";
-  ctx.font = "12px sans-serif";
-  ctx.fillText(symbol, padding.left, 14);
 }
 
 function calcInsight() {
   const latest = [...pointHistory.entries()]
     .map(([name, points]) => ({ name, price: points[points.length - 1]?.value, points }))
-    .filter((row) => typeof row.price === "number");
+    .filter((row) => typeof row.price === "number" && row.points.length > 0);
 
   if (latest.length === 0) {
     return null;
@@ -143,7 +200,7 @@ function calcInsight() {
   const buys = latest
     .map((row) => {
       const max = Math.max(...row.points.map((p) => p.value));
-      const dropRate = (max - row.price) / max;
+      const dropRate = max > 0 ? (max - row.price) / max : 0;
       return { ...row, max, dropRate };
     })
     .filter((row) => row.dropRate >= 0.1)
@@ -153,7 +210,7 @@ function calcInsight() {
   const sells = latest
     .map((row) => {
       const min = Math.min(...row.points.map((p) => p.value));
-      const riseRate = (row.price - min) / min;
+      const riseRate = min > 0 ? (row.price - min) / min : 0;
       return { ...row, min, riseRate };
     })
     .filter((row) => row.riseRate >= 0.1)
@@ -161,6 +218,11 @@ function calcInsight() {
     .slice(0, 5);
 
   return { cheapest, highest, buys, sells };
+}
+
+function symbolLabel(symbol) {
+  const meta = companyMeta.get(symbol);
+  return meta?.name && meta.name !== symbol ? `${meta.name} (${symbol})` : symbol;
 }
 
 function renderInsights() {
@@ -174,8 +236,8 @@ function renderInsights() {
   }
 
   const cards = [
-    { label: "現在最安値", value: `${insight.cheapest.name}: ${formatNum(insight.cheapest.price)}` },
-    { label: "現在最高値", value: `${insight.highest.name}: ${formatNum(insight.highest.price)}` },
+    { label: "現在最安値", value: `${symbolLabel(insight.cheapest.name)}: ${formatNum(insight.cheapest.price)}` },
+    { label: "現在最高値", value: `${symbolLabel(insight.highest.name)}: ${formatNum(insight.highest.price)}` },
   ];
 
   cards.forEach((card) => {
@@ -190,7 +252,7 @@ function renderInsights() {
   } else {
     insight.buys.forEach((row) => {
       const li = document.createElement("li");
-      li.textContent = `${row.name}: 現在 ${formatNum(row.price)} (最高値 ${formatNum(row.max)} から ${(row.dropRate * 100).toFixed(1)}% 下落)`;
+      li.textContent = `${symbolLabel(row.name)}: 現在 ${formatNum(row.price)} (最高値 ${formatNum(row.max)} から ${(row.dropRate * 100).toFixed(1)}% 下落)`;
       buyCandidates.appendChild(li);
     });
   }
@@ -200,7 +262,7 @@ function renderInsights() {
   } else {
     insight.sells.forEach((row) => {
       const li = document.createElement("li");
-      li.textContent = `${row.name}: 現在 ${formatNum(row.price)} (最安値 ${formatNum(row.min)} から ${(row.riseRate * 100).toFixed(1)}% 上昇)`;
+      li.textContent = `${symbolLabel(row.name)}: 現在 ${formatNum(row.price)} (最安値 ${formatNum(row.min)} から ${(row.riseRate * 100).toFixed(1)}% 上昇)`;
       sellCandidates.appendChild(li);
     });
   }
@@ -213,13 +275,13 @@ function renderCompanyList() {
     const li = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = symbol;
+    button.textContent = symbolLabel(symbol);
     if (symbol === selectedSymbol) {
       button.classList.add("active");
     }
     button.addEventListener("click", () => {
       selectedSymbol = symbol;
-      selectedSymbolTitle.textContent = `${selectedSymbol} グラフ`;
+      selectedSymbolTitle.textContent = `${symbolLabel(selectedSymbol)} グラフ`;
       drawChart(selectedSymbol);
       updateHistoryView();
       renderCompanyList();
@@ -232,10 +294,10 @@ function renderCompanyList() {
 
 function updateHistoryView() {
   historyList.innerHTML = "";
-  const points = pointHistory.get(selectedSymbol) || [];
+  const points = (pointHistory.get(selectedSymbol) || []).slice(-80);
   [...points].reverse().forEach((point) => {
     const li = document.createElement("li");
-    li.textContent = `${selectedSymbol}: ${formatNum(point.value)} (${point.label})`;
+    li.textContent = `${symbolLabel(selectedSymbol)}: ${formatNum(point.value)} (${point.label})`;
     historyList.appendChild(li);
   });
 }
@@ -250,18 +312,16 @@ async function fetchStock() {
     const data = await response.json();
     responseView.textContent = JSON.stringify(data, null, 2);
 
-    const entries = extractEntries(data);
+    const entries = applyData(data);
     if (entries.length === 0) {
       throw new Error("数値の stock 情報が見つかりませんでした。");
     }
-
-    entries.forEach((entry) => addPricePoint(entry.name, entry.value));
 
     if (!pointHistory.has(selectedSymbol)) {
       selectedSymbol = entries[0].name;
     }
 
-    selectedSymbolTitle.textContent = `${selectedSymbol} グラフ`;
+    selectedSymbolTitle.textContent = `${symbolLabel(selectedSymbol)} グラフ`;
     renderCompanyList();
     updateHistoryView();
     renderInsights();
