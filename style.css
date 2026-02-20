@@ -1,0 +1,140 @@
+:root {
+  color-scheme: light dark;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 20px;
+}
+
+main {
+  max-width: 960px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.top-bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+h1 {
+  margin: 0 0 6px;
+}
+
+.menu-toggle {
+  font-size: 16px;
+  border: 1px solid #6c757d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.drawer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 260px;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid #6c757d;
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  transform: translateX(-120%);
+  transition: transform 0.2s ease;
+  z-index: 5;
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.company-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.company-list button {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 6px;
+  border: 1px solid #6c757d;
+  border-radius: 6px;
+  padding: 8px;
+  background: transparent;
+}
+
+.company-list button.active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+button,
+input {
+  font-size: 14px;
+}
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.insight-card {
+  border: 1px solid #6c757d;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.insight-card .label {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.insight-card .value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#responseView {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #6c757d;
+  max-height: 280px;
+  overflow: auto;
+}
+
+#stockCanvas {
+  width: 100%;
+  border: 1px solid #6c757d;
+  border-radius: 8px;
+  background: #fff;
+}
+
+#history,
+#buyCandidates,
+#sellCandidates {
+  max-height: 180px;
+  overflow: auto;
+  padding-left: 18px;
+}
