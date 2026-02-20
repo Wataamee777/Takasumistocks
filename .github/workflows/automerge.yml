@@ -1,6 +1,12 @@
 name: Auto Merge Conflict Resolver
 
 on:
+  workflow_dispatch:
+    inputs:
+      branch_to_merge:
+        description: 'マージ元のブランチ名 (子ブランチ)'
+        required: true
+        default: 'develop'
   pull_request:
     branches:
       - main 
